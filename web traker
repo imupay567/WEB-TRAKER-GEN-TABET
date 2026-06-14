@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sustainova Gizi - Monitoring Remaja</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+        }
+        h2 { color: #2c3e50; margin-bottom: 5px; }
+        
+        /* Slider Navigasi Kartu */
+        .slider-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 15px 0;
+            background: #eaeded;
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        .nav-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .nav-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #currentDayTitle {
+            font-weight: bold;
+            color: #34495e;
+        }
+
+        /* Streak Box */
+        .streak-box {
+            background-color: #fcf3cf;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #b7950b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        /* Gaya Animasi Karakter */
+        .avatar-box {
+            width: 130px;
+            height: 130px;
+            margin: 0 auto 15px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 65px;
+            transition: all 0.5s ease;
+        }
+        .sakit { background-color: #fce4e4; border: 4px solid #e74c3c; }
+        .lemes { background-color: #fef5e7; border: 4px solid #f39c12; }
+        .seger { background-color: #e8f8f5; border: 4px solid #2ecc71; }
+        
+        .status-text {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        /* Daftar Tugas */
+        .task-list { text-align: left; margin-bottom: 20px; }
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #f8f9fa;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            border-left: 5px solid #bdc3c7;
+            transition: 0.2s;
+        }
+        .task-item.checked {
+            border-left-color: #2ecc71;
+            background-color: #e8f8f5;
+        }
+        .task-item input { margin-right: 15px; transform: scale(1.2); }
+        
+        /* Overlay jika hari esok belum bisa dipencet */
+        .locked-overlay {
+            color: #e74c3c;
+            font-weight: bold;
+            background: #fadbd8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .info-reset {
+            font-size: 11px;
+            color: #95a5a6;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Healthy Habit Tracker</h2>
+    
+    <!-- Navigasi Geser Kartu Hari (Total 89 slide kartu dari hari 1 sampai 90) -->
+    <div class="slider-nav">
+        <button class="nav-btn" id="prevBtn" onclick="changeDay(-1)">◀ Back</button>
+        <span id="currentDayTitle">Hari ke-1</span>
+        <button class="nav-btn" id="nextBtn" onclick="changeDay(1)">Next ▶</button>
+    </div>
+    
+    <!-- Streak Dinamis mulai dari 0 -->
+    <div class="streak-box">
+        <span>🔥 Streak Kamu:</span>
+        <span id="streakCount">0</span> Hari
+    </div>
+
+    <!-- Avatar Animasi -->
+    <div id="avatar" class="avatar-box sakit">🤢</div>
+    <div id="statusText" class="status-text" style="color: #e74c3c;">Kondisi: Sakit / Kurang Fit</div>
+
+    <!-- Notifikasi kalau hari esok belum boleh diisi -->
+    <div id="lockMessage" class="locked-overlay">🔒 Belum ganti hari! Kamu tidak bisa mengisi tugas hari esok sekarang.</div>
+
+    <!-- Konten Tugas Dinamis -->
+    <div class="task-list" id="taskListContainer">
+        <!-- Diisi otomatis oleh JavaScript -->
+    </div>
+
+    <p class="info-reset">Sistem otomatis reset jika melewati pukul 24:00</p>
+</div>
+
+<script>
+    // Data simulasi hari nyata (kita set hari pertama pengerjaan di web)
+    let hariSelesaiTerakhir = 0; 
+    let currentActiveDay = 1; // Kartu yang sedang dilihat user
+    let streak = 0;
+    let hariNyataMulai = new Date().getDate(); // Menyimpan tanggal hari ini sebagai penanda ganti hari
+
+    // Struktur tugas: Hari 1 (1 tugas), Hari 2 (2 tugas), Hari 3-90 (3 tugas, ganti target per bulan)
+    function getTasksForDay(day) {
+        if (day === 1) {
+            return ["Kurangi Minuman Manis (Bulan 1)"];
+        } else if (day === 2) {
+            return ["Kurangi Minuman Manis (Bulan 1)", "Tidur Tepat Waktu Max Jam 10 (Bulan 1)"];
+        } else if (day >= 3 && day <= 30) {
+            return ["Kurangi Minuman Manis (Bulan 1)", "Tidur Tepat Waktu (Bulan 1)", "Minum Air Putih 2 Liter (Bulan 1)"];
+        } else if (day >= 31 && day <= 60) {
+            return ["No Junk Food (Bulan 2)", "Jalan Kaki 5000 Langkah (Bulan 2)", "Konsumsi Sayur/Buah (Bulan 2)"];
+        } else {
+            return ["Batasi Karbohidrat Berlebih (Bulan 3)", "Olahraga 20 Menit (Bulan 3)", "Puasa Gula Kemasan (Bulan 3)"];
+        }
+    }
+
+    // Status penyimpanan centang untuk tiap hari (simulasi database lokal)
+    let databaseCentang = {};
+
+    function renderKartuHari(day) {
+        currentActiveDay = day;
+        document.getElementById('currentDayTitle').innerText = `Hari ke-${day}`;
+        
+        const container = document.getElementById('taskListContainer');
+        container.innerHTML = "";
+        
+        const tasks = getTasksForDay(day);
+        const savedStatus = databaseCentang[day] || new Array(tasks.length).fill(false);
+        
+        // Cek apakah kartu ini boleh dipencet (Hanya boleh jika hari nyata sudah bertambah)
+        const hariNyataSekarang = new Date().getDate();
+        const selisihHariNyata = hariNyataSekarang - hariNyataMulai;
+        const bolehIsi = (day <= (hariSelesaiTerakhir + 1)) && (day <= (selisihHariNyata + 1));
+
+        if (!bolehIsi) {
+            document.getElementById('lockMessage').style.display = "block";
+        } else {
+            document.getElementById('lockMessage').style.display = "none";
+        }
+
+        tasks.forEach((task, index) => {
+            const taskItem = document.createElement('div');
+            taskItem.className = `task-item ${savedStatus[index] ? 'checked' : ''}`;
+            
+            // Jika dikunci, matikan fungsi kliknya
+            if (bolehIsi) {
+                taskItem.onclick = function() { toggleTask(this, day, index); };
+            } else {
+                taskItem.style.opacity = "0.5";
+                taskItem.style.cursor = "not-allowed";
+            }
+
+            taskItem.innerHTML = `
+                <input type="checkbox" ${savedStatus[index] ? 'checked' : ''} ${!bolehIsi ? 'disabled' : ''}>
+                <label>${index + 1}. ${task}</label>
+            `;
+            container.appendChild(taskItem);
+        });
+
+        updateAvatar(day);
+        updateTombolNavigasi();
+    }
+
+    function toggleTask(element, day, index) {
+        const checkbox = element.querySelector('input[type="checkbox"]');
+        if (event.target !== checkbox) {
+            checkbox.checked = !checkbox.checked;
+        }
+        
+        if(checkbox.checked) {
+            element.classList.add('checked');
+        } else {
+            element.classList.remove('checked');
+        }
+
+        // Simpan status centang ke objek database lokal kita
+        if (!databaseCentang[day]) {
+            databaseCentang[day] = new Array(getTasksForDay(day).length).fill(false);
+        }
+        databaseCentang[day][index] = checkbox.checked;
+
+        updateAvatar(day);
+        
+        // Cek jika hari ini baru saja diselesaikan secara penuh
+        const totalTugas = getTasksForDay(day).length;
+        const totalDicentang = databaseCentang[day].filter(Boolean).length;
+        
+        if (totalDicentang === totalTugas && day > hariSelesaiTerakhir) {
+            hariSelesaiTerakhir = day;
+            streak++;
+            document.getElementById('streakCount').innerText = streak;
+            updateTombolNavigasi();
+        } else if (totalDicentang < totalTugas && day === hariSelesaiTerakhir) {
+            // Jika ada yang dicentang ulang/dibatalkan
+            hariSelesaiTerakhir = day - 1;
+            if(streak > 0) streak--;
+            document.getElementById('streakCount').innerText = streak;
+            updateTombolNavigasi();
+        }
+    }
+
+    function updateAvatar(day) {
+        const tasks = getTasksForDay(day);
+        const savedStatus = databaseCentang[day] || new Array(tasks.length).fill(false);
+        const totalSelesai = savedStatus.filter(Boolean).length;
+        const totalTugas = tasks.length;
+
+        const avatar = document.getElementById('avatar');
+        const statusText = document.getElementById('statusText');
+        
+        if (totalSelesai === 0) {
+            avatar.className = "avatar-box sakit";
+            avatar.innerText = "🤢";
+            statusText.innerText = "Kondisi: Sakit / Kurang Fit";
+            statusText.style.color = "#e74c3c";
+        } else if (totalSelesai > 0 && totalSelesai < totalTugas) {
+            avatar.className = "avatar-box lemes";
+            avatar.innerText = totalSelesai === 1 ? "🥱" : "😐";
+            statusText.innerText = totalSelesai === 1 ? "Kondisi: Masih Lemas" : "Kondisi: Cukup Lemas";
+            statusText.style.color = "#f39c12";
+        } else if (totalSelesai === totalTugas) {
+            avatar.className = "avatar-box seger";
+            avatar.innerText = "😁";
+            statusText.innerText = "Kondisi: Seger & Bugar!";
+            statusText.style.color = "#2ecc71";
+        }
+    }
+
+    function updateTombolNavigasi() {
+        document.getElementById('prevBtn').disabled = (currentActiveDay === 1);
+        
+        // Aturan Kunci Slide: Tombol Next HANYA bisa dipencet jika hari aktif ini sudah selesai (Streak menyala)
+        const tasks = getTasksForDay(currentActiveDay);
+        const savedStatus = databaseCentang[currentActiveDay] || new Array(tasks.length).fill(false);
+        const hariIniSelesai = savedStatus.filter(Boolean).length === tasks.length;
+
+        document.getElementById('nextBtn').disabled = (currentActiveDay === 90) || !hariIniSelesai;
+    }
+
+    function changeDay(direction) {
+        const targetDay = currentActiveDay + direction;
+        if (targetDay >= 1 && targetDay <= 90) {
+            renderKartuHari(targetDay);
+        }
+    }
+
+    // Jalankan render awal saat web dibuka (Hari ke-1)
+    renderKartuHari(1);
+</script>
+</body>
+</html>
